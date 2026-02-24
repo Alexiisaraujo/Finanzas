@@ -1,128 +1,327 @@
-const balanceEl = document.getElementById("balance");
-const amountInput = document.getElementById("amount");
-const descInput = document.getElementById("description");
-const loanInput = document.getElementById("isLoan");
+// =======================================
+// ESTADO GLOBAL
+// =======================================
 
-const incomeBtn = document.getElementById("incomeBtn");
-const expenseBtn = document.getElementById("expenseBtn");
+let ledger = JSON.parse(localStorage.getItem("ledger")) || [];
+let editingId = null;
 
-const viewBtn = document.getElementById("viewMovements");
-const backBtn = document.getElementById("backBtn");
+const MAX_AMOUNT = 10000000; // Límite máximo permitido
 
-const mainScreen = document.getElementById("mainScreen");
-const movementsScreen = document.getElementById("movementsScreen");
-const movementsList = document.getElementById("movementsList");
-
-const downloadBtn = document.getElementById("downloadBtn");
-
-let data = JSON.parse(localStorage.getItem("financeData")) || [];
+// =======================================
+// GUARDAR EN LOCALSTORAGE
+// =======================================
 
 function save() {
-  localStorage.setItem("financeData", JSON.stringify(data));
+  localStorage.setItem("ledger", JSON.stringify(ledger));
 }
 
-function updateBalance() {
-  const total = data.reduce((acc, item) => {
-    return acc + item.amount;
+// =======================================
+// OBTENER TOTAL POR CUENTA (doble partida)
+// =======================================
+
+function getAccountTotal(account) {
+  return ledger.reduce((total, entry) => {
+    entry.entries.forEach(e => {
+      if (e.account === account) {
+        total += e.debit - e.credit;
+      }
+    });
+    return total;
   }, 0);
-
-  balanceEl.textContent = "$" + total;
-  balanceEl.style.color = total >= 0 ? "#2ecc71" : "#e74c3c";
 }
 
-function addMovement(type) {
-  const amount = Number(amountInput.value);
-  if (!amount) return;
+// =======================================
+// FORMATEO SEGURO DE DINERO
+// =======================================
 
-  const movement = {
-    id: Date.now(),
-    amount: type === "income" ? amount : -amount,
-    description: descInput.value,
-    loan: loanInput.checked,
-    date: new Date().toISOString()
+function formatMoney(value) {
+  return Number(value).toLocaleString("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+// =======================================
+// ACTUALIZAR BALANCES EN PANTALLA
+// =======================================
+
+function updateBalances() {
+
+  const caja = getAccountTotal("Caja");
+  const prestamos = Math.abs(getAccountTotal("Prestamos"));
+  const deudas = Math.abs(getAccountTotal("Deudas"));
+
+  document.getElementById("balance").textContent = "$" + formatMoney(caja);
+  document.getElementById("loanTotal").textContent = formatMoney(prestamos);
+  document.getElementById("debtTotal").textContent = formatMoney(deudas);
+  document.getElementById("realBalance").textContent =
+    formatMoney(caja - prestamos - deudas);
+
+  document.getElementById("balance").style.color =
+    caja >= 0 ? "#2ecc71" : "#e74c3c";
+}
+
+// =======================================
+// VALIDAR MONTO
+// =======================================
+
+function validateAmount(amount) {
+  if (isNaN(amount) || amount <= 0) {
+    alert("Monto inválido.");
+    return false;
+  }
+
+  if (amount > MAX_AMOUNT) {
+    alert("Número demasiado grande.");
+    return false;
+  }
+
+  return true;
+}
+
+// =======================================
+// POPUP DE PRÉSTAMO (TOTAL A PAGAR)
+// =======================================
+
+function loanPopup(principal) {
+
+  let totalToPay = Number(prompt("¿Cuánto vas a pagar en total?"));
+
+  if (isNaN(totalToPay) || totalToPay <= principal) {
+    alert("El total debe ser mayor que el monto recibido.");
+    return null;
+  }
+
+  let installments = Number(prompt("¿En cuántas cuotas?"));
+
+  if (isNaN(installments) || installments <= 0) {
+    alert("Cuotas inválidas.");
+    return null;
+  }
+
+  const interestAmount = totalToPay - principal;
+  const interestPercent = (interestAmount / principal) * 100;
+  const installmentValue = totalToPay / installments;
+
+  return {
+    principal,
+    totalToPay,
+    interestAmount,
+    interestPercent: interestPercent.toFixed(2),
+    installments,
+    installmentValue
+  };
+}
+
+// =======================================
+// AGREGAR O EDITAR MOVIMIENTO
+// =======================================
+
+function addEntry(type) {
+
+  const amount = Number(document.getElementById("amount").value);
+  const description = document.getElementById("description").value;
+  const operationType = document.getElementById("operationType").value;
+
+  if (!validateAmount(amount)) return;
+
+  const cajaActual = getAccountTotal("Caja");
+  const deudaActual = Math.abs(getAccountTotal("Deudas"));
+  const prestamoActual = Math.abs(getAccountTotal("Prestamos"));
+
+  // No pagar si no hay saldo
+  if (type === "expense" && amount > cajaActual) {
+    alert("Master no tenés plata para pagar esto.");
+    return;
+  }
+
+  // No pagar más deuda de la que existe
+  if (operationType === "debt" && type === "expense" && amount > deudaActual) {
+    alert("No podés pagar más deuda de la que debés.");
+    return;
+  }
+
+  // No pagar más préstamo del que existe
+  if (operationType === "loan" && type === "expense" && amount > prestamoActual) {
+    alert("No podés pagar más préstamo del que debés.");
+    return;
+  }
+
+  let entries = [];
+  let loanDetails = null;
+
+  // ================= NORMAL =================
+  if (operationType === "normal") {
+
+    if (type === "income") {
+      entries = [
+        { account: "Caja", debit: amount, credit: 0 },
+        { account: "Ingresos", debit: 0, credit: amount }
+      ];
+    } else {
+      entries = [
+        { account: "Gastos", debit: amount, credit: 0 },
+        { account: "Caja", debit: 0, credit: amount }
+      ];
+    }
+  }
+
+  // ================= PRÉSTAMO =================
+  if (operationType === "loan") {
+
+    if (type === "income") {
+
+      loanDetails = loanPopup(amount);
+      if (!loanDetails) return;
+
+      entries = [
+        { account: "Caja", debit: amount, credit: 0 },
+        { account: "Prestamos", debit: 0, credit: loanDetails.totalToPay }
+      ];
+
+    } else {
+
+      entries = [
+        { account: "Prestamos", debit: amount, credit: 0 },
+        { account: "Caja", debit: 0, credit: amount }
+      ];
+    }
+  }
+
+  // ================= DEUDA =================
+  if (operationType === "debt") {
+
+    if (type === "income") {
+      entries = [
+        { account: "Deudas", debit: 0, credit: amount }
+      ];
+    } else {
+      entries = [
+        { account: "Deudas", debit: amount, credit: 0 },
+        { account: "Caja", debit: 0, credit: amount }
+      ];
+    }
+  }
+
+  const entry = {
+    id: editingId || Date.now(),
+    date: new Date().toISOString(),
+    description,
+    amount,
+    type,
+    operationType,
+    loanDetails,
+    entries
   };
 
-  data.push(movement);
+  if (editingId) {
+    ledger = ledger.map(l => l.id === editingId ? entry : l);
+    editingId = null;
+  } else {
+    ledger.push(entry);
+  }
 
-  data.sort((a, b) => new Date(b.date) - new Date(a.date));
+  ledger.sort((a,b)=> new Date(b.date) - new Date(a.date));
 
   save();
-  updateBalance();
-  renderMovements();
+  render();
+  updateBalances();
 
-  amountInput.value = "";
-  descInput.value = "";
-  loanInput.checked = false;
+  document.getElementById("amount").value = "";
+  document.getElementById("description").value = "";
 }
 
-incomeBtn.onclick = () => addMovement("income");
-expenseBtn.onclick = () => addMovement("expense");
+// =======================================
+// RENDER MOVIMIENTOS
+// =======================================
 
-function renderMovements() {
-  movementsList.innerHTML = "";
+function render() {
 
-  data.forEach(m => {
+  const list = document.getElementById("movementsList");
+  list.innerHTML = "";
+
+  ledger.forEach(l => {
+
     const div = document.createElement("div");
     div.className = "movement";
 
+    let extra = "";
+
+    if (l.loanDetails) {
+      extra = `
+        <br><small>
+        Total: $${formatMoney(l.loanDetails.totalToPay)} |
+        Interés: ${l.loanDetails.interestPercent}% |
+        Cuotas: ${l.loanDetails.installments} |
+        Valor cuota: $${formatMoney(l.loanDetails.installmentValue)}
+        </small>
+      `;
+    }
+
     div.innerHTML = `
-      <strong>${m.amount > 0 ? "+" : ""}${m.amount}</strong>
-      ${m.loan ? "(Préstamo)" : ""}
-      <small>${new Date(m.date).toLocaleString()}</small>
-      <div>${m.description || ""}</div>
+      <div class="amount">
+        ${l.type === "income" ? "+" : "-"}$${formatMoney(l.amount)}
+      </div>
+      <div>${l.description || "Sin descripción"}</div>
+      <small>${new Date(l.date).toLocaleString()} (${l.operationType})</small>
+      ${extra}
       <div class="actions">
-        <button onclick="editMovement(${m.id})">Editar</button>
-        <button onclick="deleteMovement(${m.id})">Borrar</button>
+        <button data-edit="${l.id}">Editar</button>
+        <button data-delete="${l.id}">Borrar</button>
       </div>
     `;
 
-    movementsList.appendChild(div);
+    list.appendChild(div);
   });
 }
 
-function deleteMovement(id) {
-  data = data.filter(m => m.id !== id);
-  save();
-  updateBalance();
-  renderMovements();
-}
+// =======================================
+// EVENT DELEGATION (EDITAR Y BORRAR)
+// =======================================
 
-function editMovement(id) {
-  const m = data.find(x => x.id === id);
-  amountInput.value = Math.abs(m.amount);
-  descInput.value = m.description;
-  loanInput.checked = m.loan;
+document.getElementById("movementsList").addEventListener("click", (e) => {
 
-  deleteMovement(id);
-  mainScreen.classList.remove("hidden");
-  movementsScreen.classList.add("hidden");
-}
+  if (e.target.dataset.delete) {
+    const id = Number(e.target.dataset.delete);
+    ledger = ledger.filter(l => l.id !== id);
+    save();
+    render();
+    updateBalances();
+  }
 
-viewBtn.onclick = () => {
+  if (e.target.dataset.edit) {
+    const id = Number(e.target.dataset.edit);
+    const entry = ledger.find(l => l.id === id);
+
+    document.getElementById("amount").value = entry.amount;
+    document.getElementById("description").value = entry.description;
+    document.getElementById("operationType").value = entry.operationType;
+
+    editingId = id;
+
+    mainScreen.classList.remove("hidden");
+    movementsScreen.classList.add("hidden");
+  }
+
+});
+
+// =======================================
+// EVENTOS BOTONES
+// =======================================
+
+document.getElementById("incomeBtn").addEventListener("click", () => addEntry("income"));
+document.getElementById("expenseBtn").addEventListener("click", () => addEntry("expense"));
+
+document.getElementById("viewBtn").addEventListener("click", () => {
   mainScreen.classList.add("hidden");
   movementsScreen.classList.remove("hidden");
-};
+});
 
-backBtn.onclick = () => {
+document.getElementById("backBtn").addEventListener("click", () => {
   movementsScreen.classList.add("hidden");
   mainScreen.classList.remove("hidden");
-};
+});
 
-downloadBtn.onclick = () => {
-  let csv = "Monto,Descripcion,Prestamo,Fecha\n";
-
-  data.forEach(m => {
-    csv += `${m.amount},"${m.description}",${m.loan},${m.date}\n`;
-  });
-
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "movimientos.csv";
-  a.click();
-};
-
-updateBalance();
-renderMovements();
+// =======================================
+updateBalances();
+render();
