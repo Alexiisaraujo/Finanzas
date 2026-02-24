@@ -1,3 +1,4 @@
+/* ===== RESET ===== */
 * {
   margin: 0;
   padding: 0;
@@ -5,6 +6,7 @@
   font-family: Arial, sans-serif;
 }
 
+/* ===== BASE ===== */
 body {
   background: #111;
   color: white;
@@ -16,14 +18,25 @@ body {
   margin: auto;
 }
 
-.balance {
-  font-size: 42px;
-  font-weight: bold;
+/* ===== BALANCE ===== */
+.balanceBox {
   text-align: center;
   margin-bottom: 25px;
 }
 
-input {
+.balance {
+  font-size: 42px;
+  font-weight: bold;
+}
+
+.subInfo {
+  font-size: 14px;
+  opacity: 0.7;
+  margin-top: 5px;
+}
+
+/* ===== INPUTS ===== */
+input, select {
   width: 100%;
   padding: 14px;
   margin-bottom: 12px;
@@ -32,16 +45,12 @@ input {
   font-size: 16px;
 }
 
-.loanBox {
-  margin-bottom: 15px;
+input:focus, select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #3498db;
 }
 
-.buttons {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
+/* ===== BOTONES ===== */
 button {
   width: 100%;
   padding: 14px;
@@ -50,40 +59,37 @@ button {
   font-size: 16px;
   font-weight: bold;
   cursor: pointer;
+  transition: 0.2s ease;
 }
 
-.income {
-  background: #2ecc71;
+button:hover {
+  opacity: 0.85;
 }
 
-.expense {
-  background: #e74c3c;
+.income { background: #2ecc71; }
+.expense { background: #e74c3c; }
+.secondary { background: #333; margin-top: 10px; }
+
+.buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 
-.secondary {
-  background: #333;
-  margin-top: 10px;
-}
+.hidden { display: none; }
 
-.download {
-  background: #3498db;
-  margin-top: 15px;
-}
-
-.hidden {
-  display: none;
-}
-
-#movementsList {
-  margin-top: 15px;
-}
-
+/* ===== MOVIMIENTOS ===== */
 .movement {
   background: #1e1e1e;
   padding: 12px;
   border-radius: 10px;
   margin-bottom: 10px;
   font-size: 14px;
+}
+
+.movement .amount {
+  font-weight: bold;
+  font-size: 16px;
 }
 
 .movement small {
