@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finanzas</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- PANTALLA PRINCIPAL -->
+  <div id="mainScreen">
+
+    <div class="balance" id="balance">$0</div>
+
+    <input type="number" id="amount" placeholder="Monto">
+
+    <input type="text" id="description" placeholder="Descripción (opcional)">
+
+    <div class="loanBox">
+      <label>
+        <input type="checkbox" id="isLoan">
+        ¿Es préstamo?
+      </label>
+    </div>
+
+    <div class="buttons">
+      <button id="incomeBtn" class="income">Ingreso</button>
+      <button id="expenseBtn" class="expense">Egreso</button>
+    </div>
+
+    <button id="viewMovements" class="secondary">
+      Ver Movimientos
+    </button>
+
+  </div>
+
+  <!-- PANTALLA MOVIMIENTOS -->
+  <div id="movementsScreen" class="hidden">
+
+    <h2>Movimientos</h2>
+
+    <div id="movementsList"></div>
+
+    <button id="downloadBtn" class="download">
+      Descargar Excel
+    </button>
+
+    <button id="backBtn" class="secondary">
+      Volver
+    </button>
+
+  </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
